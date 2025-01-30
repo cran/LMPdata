@@ -16,11 +16,11 @@ NumberOfStarsInInfixURL <-
     LMP_EXPME=4,
     LMP_PARTSUMM=6,
     LMP_PARTME=6,
-    LMP_IND_ACTSUP=6,
-    LMP_IND_ACTRU=7,
-    LMP_IND_ACTIME=6,
-    LMP_IND_EXP=5,
-    LMP_RJRU=7)
+    LMP_IND_ACTSUP=5,
+    LMP_IND_ACTRU=6,
+    LMP_IND_ACTIME=5,
+    LMP_IND_EXP=4,
+    LMP_RJRU=6)
 
 infixURL <- function(dataset_code)
   paste0(dataset_code,'/1.0/A',

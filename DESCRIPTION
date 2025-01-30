@@ -1,7 +1,7 @@
 Package: LMPdata
 Type: Package
 Title: Easy Import of the EU Labour Market Policy Data
-Version: 0.1.0
+Version: 0.2.0
 Author: Aleksander Rutkowski [aut, cre]
 Maintainer: Aleksander Rutkowski <alek.rutkowski@gmail.com>
 Authors@R: c(person("Aleksander", "Rutkowski", role = c("aut", "cre"),
@@ -15,10 +15,10 @@ Description: European Commission's Labour Market Policy (LMP) database
   importing the LMP data and metadata (codelists).
 License: MIT + file LICENSE
 Encoding: UTF-8
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
 Imports: magrittr, data.table
 URL: https://github.com/alekrutkowski/LMPdata
 NeedsCompilation: no
-Packaged: 2024-07-16 07:30:38 UTC; alekr
+Packaged: 2025-01-30 08:32:33 UTC; rutkoal
 Repository: CRAN
-Date/Publication: 2024-07-18 23:10:10 UTC
+Date/Publication: 2025-01-30 08:50:02 UTC
