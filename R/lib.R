@@ -46,6 +46,109 @@ URLfilters <- function(filters_list)
 suffixURL <-
   'compress=false&format=csvdata&formatVersion=2.0'
 
+cleanHttpErrorText <- function(x, n=2000L) {
+  x <- x %>%
+    gsub('\\s+', ' ', .) %>%
+    trimws()
+  if (nchar(x, type='chars') > n)
+    paste0(substr(x, 1L, n), '...')
+  else
+    x
+}
+
+looksLikeHtml <- function(x)
+  is.character(x) && length(x)==1L &&
+  grepl('<!doctype html|<html|</html>|<head|<body', x, ignore.case=TRUE)
+
+looksLikeHtmlTable <- function(x, n=5L) {
+  if (!inherits(x, 'data.frame')) return(FALSE)
+  z <- c(colnames(x),
+         x %>% utils::head(n) %>% unlist(use.names=FALSE) %>% as.character()) %>%
+    paste(collapse='\n')
+  looksLikeHtml(z)
+}
+
+extractXmlHttpError <- function(status_code, body) {
+  x <- xml2::read_xml(body)
+  fault_code <- x %>%
+    xml2::xml_find_first(".//*[local-name()='faultcode']") %>%
+    xml2::xml_text()
+  fault_string <- x %>%
+    xml2::xml_find_first(".//*[local-name()='faultstring']") %>%
+    xml2::xml_text()
+
+  if (!is.na(fault_string) && nzchar(fault_string))
+    paste0('HTTP error ', status_code,
+           if (!is.na(fault_code) && nzchar(fault_code))
+             paste0(' / faultcode ', fault_code) else '',
+           ': ', fault_string)
+  else
+    paste0('HTTP error ', status_code, ':\n',
+           x %>% xml2::xml_text() %>% cleanHttpErrorText())
+}
+
+extractHtmlHttpError <- function(status_code, body) {
+  x <- xml2::read_html(body)
+  title <- x %>%
+    xml2::xml_find_first('.//title') %>%
+    xml2::xml_text()
+  text <- x %>%
+    xml2::xml_find_first('.//body') %>%
+    xml2::xml_text()
+  msg <- c(title, text) %>%
+    .[!is.na(.) & nzchar(.)] %>%
+    paste(collapse='\n') %>%
+    cleanHttpErrorText()
+  paste0('HTTP error ', status_code, ':\n', msg)
+}
+
+extractRawHttpError <- function(status_code, body) {
+  msg <- body %>%
+    gsub('<[^>]+>', ' ', .) %>%
+    cleanHttpErrorText()
+  paste0('HTTP error ', status_code,
+         if (nzchar(msg)) paste0(':\n', msg) else '')
+}
+
+read_or_error <- function(f, url, ...) {
+  tryCatch(
+    {
+      x <- f(url, ...)
+      if (looksLikeHtmlTable(x))
+        stop('downloaded content looks like an HTML error page, not tabular data')
+      x
+    },
+    error = function(e_import) {
+      res <- tryCatch(
+        curl::curl_fetch_memory(url),
+        error = function(e_curl) {
+          stop('import failed: ', conditionMessage(e_import),
+               '\nCould not retrieve HTTP error body: ', conditionMessage(e_curl),
+               call.=FALSE)
+        }
+      )
+
+      body <- rawToChar(res$content)
+
+      if (res$status_code >= 400L || looksLikeHtml(body)) {
+        msg <- tryCatch(
+          extractXmlHttpError(res$status_code, body),
+          error = function(e_xml) tryCatch(
+            extractHtmlHttpError(res$status_code, body),
+            error = function(e_html) extractRawHttpError(res$status_code, body)
+          )
+        )
+        stop(msg, call.=FALSE)
+      } else {
+        stop('import failed, but re-fetch returned HTTP ', res$status_code,
+             '. This is probably a parsing/import error rather than an HTTP error.\n',
+             conditionMessage(e_import),
+             call.=FALSE)
+      }
+    }
+  )
+}
+
 removeRedundantColumns <- function(dt)
   dt[, c("STRUCTURE","STRUCTURE_ID","FREQ") := NULL]
 
@@ -99,10 +202,12 @@ importData <- function(lmp_dataset_code, filters=list()) {
       if ( is.null(names.) || any(names.=="") ||
            length(names.)>length(unique(names.)) )
         stop('`filters` must be a list with each element uniquely named!')
-      filters %>% set_names(toupper(names(.)))
+      filters %>%
+        set_names(toupper(names(.))) %>%
+        lapply(function(x) x %>% as.character() %>% utils::URLencode())
     }
   paste0(BaseURL,infixURL(LMP_DATASET_CODE),URLfilters(FILTERS),suffixURL) %>%
-    fread(sep=',') %>%
+    read_or_error(fread, ., sep=',') %>%
     removeRedundantColumns() %>%
     setnames(colnames(.),tolower(colnames(.))) %>%
     setnames(c("obs_value","obs_flag"),
@@ -141,7 +246,7 @@ importLabels <- function(dimension_code) {
   paste0('https://webgate.ec.europa.eu/empl/redisstat/api/dissemination/sdmx/2.1/codelist/EMPL/CL_',
          toupper(dimension_code) %>% ifelse(.=='FLAGS_','OBS_FLAG',.),
          '/latest?compressed=false&format=TSV&lang=en') %>%
-    fread(header=FALSE, sep='\t') %>%
+    read_or_error(fread, ., header=FALSE, sep='\t') %>%
     setnames(colnames(.),
              c(tolower(dimension_code),
                tolower(dimension_code) %>% paste0('__label')))

@@ -1,6 +1,11 @@
 LMPdata – R package for the EU Labour Market Policy database
 ================
-2024-07-10
+
+#### NEW (June 2026):
+
+Improved handling of HTML/HTTP error responses and clearer import error messages.
+
+2026-06-18
 
 # Installation
 
